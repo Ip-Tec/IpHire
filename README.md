@@ -58,12 +58,12 @@ Create a `.env` file in the root directory and configure your keys:
 # Database Credentials
 DB_HOST=gateway01.us-east-1.prod.aws.tidbcloud.com
 DB_PORT=4000
-DB_USERNAME=ymKWtM9HfTurRpP.root
-DB_PASSWORD=0EVzCkmsYgjOsLmD
-DB_DATABASE=sys
+DB_USERNAME=your_tidb_username
+DB_PASSWORD=your_tidb_password
+DB_DATABASE=your_db_name
 
 # Jooble Default Integration Key
-JOOBLE_API_KEY=a6807411-7197-4363-ad56-790dc8e42580
+JOOBLE_API_KEY=your_jooble_api_key
 ```
 
 ### 3. Run Development Server
