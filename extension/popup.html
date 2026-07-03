@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #fafafb;
+      color: #1f2937;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #005f73 0%, #006d77 100%);
+      color: white;
+      font-weight: 800;
+      font-size: 14px;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .title {
+      font-weight: 700;
+      font-size: 15px;
+      color: #111827;
+      margin: 0;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 1px;
+    }
+    .card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      margin-bottom: 16px;
+    }
+    .label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #4b5563;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .input-field {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #374151;
+      outline: none;
+      background: #fafafa;
+    }
+    .input-field:focus {
+      border-color: #006d77;
+      background: white;
+    }
+    .btn {
+      width: 100%;
+      background: #006d77;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:hover {
+      background: #005f73;
+    }
+    .status-area {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #4b5563;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .status-val {
+      font-weight: 600;
+      color: #111827;
+    }
+    .footer {
+      font-size: 10px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 16px;
+    }
+    .footer a {
+      color: #006d77;
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-badge">Ip</div>
+    <div>
+      <h1 class="title">IpHire AI Agent</h1>
+      <div class="subtitle">Auto-Fill & Submission Companion</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label class="label">Sync Settings</label>
+    <input type="text" id="host-url" class="input-field" value="http://localhost:3000"/>
+  </div>
+
+  <div class="card">
+    <label class="label">Stored Metrics</label>
+    <div class="status-area">
+      <div class="status-row">
+        <span>Active User:</span>
+        <span class="status-val" id="profile-name">—</span>
+      </div>
+      <div class="status-row">
+        <span>Resumes Synced:</span>
+        <span class="status-val" id="resumes-count">—</span>
+      </div>
+      <div class="status-row">
+        <span>Last Sync:</span>
+        <span class="status-val" id="sync-time">—</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn" id="sync-btn">Sync Web Storage</button>
+
+  <div class="footer">
+    Run local app at <a href="http://localhost:3000" target="_blank">localhost:3000</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

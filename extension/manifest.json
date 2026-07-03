@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "IpHire AI Auto-Submit Agent",
+  "version": "1.0.0",
+  "description": "Scans job applications, fills form fields automatically with your optimized resumes and profile, and helps you apply with one click.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost:3000/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

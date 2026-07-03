@@ -1,0 +1,354 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { dbManager, ChatSession, ChatMessage, UserProfile } from '@/lib/db';
+import { streamChat } from '@/lib/llm';
+import {
+  Send, Sparkles, X, Loader2, Bot, ArrowRight, CheckCircle,
+  Sidebar as SidebarIcon, PanelRight, ChevronDown
+} from 'lucide-react';
+
+// Navigation route map matching ActivePage ids in page.tsx
+const ROUTE_MAP: Record<string, string> = {
+  'dashboard': 'dashboard',
+  'resume-studio': 'resume',
+  'cover-letters': 'cover',
+  'job-analyzer': 'analyzer',
+  'job-discovery': 'discovery',
+  'app-tracker': 'tracker',
+  'skill-gap': 'gap',
+  'interview-coach': 'coach',
+  'scheduler': 'scheduler',
+  'profile': 'profile',
+  'auto-fill': 'autofill',
+  'ai-workflows': 'workflows',
+  'web-builder': 'portfolio',
+  'analytics': 'analytics',
+  'settings': 'settings',
+};
+
+// Reverse map for context display
+const PAGE_LABELS: Record<string, string> = {
+  'dashboard': 'Dashboard',
+  'profile': 'My Profile',
+  'resume': 'Resume Studio',
+  'cover': 'Cover Letters',
+  'analyzer': 'Job Analyzer',
+  'discovery': 'Job Discovery',
+  'tracker': 'App Tracker',
+  'gap': 'Skill Gap',
+  'coach': 'Interview Coach',
+  'scheduler': 'Scheduler',
+  'autofill': 'Auto-Fill Tools',
+  'workflows': 'AI Workflows',
+  'portfolio': 'Web Builder',
+  'analytics': 'Analytics',
+  'settings': 'BYOK Settings',
+};
+
+export function GlobalChat() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<'drawer' | 'sidebar'>('drawer');
+
+  const [session, setSession] = useState<ChatSession | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Context awareness
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [currentPage, setCurrentPage] = useState('dashboard');
+
+  // Listen for page changes from the dashboard
+  useEffect(() => {
+    const handlePageChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.page) setCurrentPage(detail.page);
+    };
+    window.addEventListener('page_changed', handlePageChange);
+    return () => window.removeEventListener('page_changed', handlePageChange);
+  }, []);
+
+  useEffect(() => {
+    async function init() {
+      const list = await dbManager.getChats();
+      let s: ChatSession;
+      if (list.length > 0) {
+        s = list[0];
+      } else {
+        s = {
+          id: `chat-${Date.now()}`,
+          title: 'Career Session',
+          messages: [{
+            id: 'welcome',
+            role: 'assistant',
+            content: '👋 Hi! I\'m your **Global AI Career Agent**.\n\nI follow you across every page! Ask me to navigate you around, update your profile, or help with any career task.',
+            timestamp: Date.now(),
+          }],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await dbManager.saveChat(s);
+      }
+      setSession(s);
+      setMessages(s.messages);
+
+      const p = await dbManager.getSetting<UserProfile>('user_profile', {} as any);
+      setProfile(p);
+    }
+    init();
+
+    const handleProfileUpdate = async () => {
+      const p = await dbManager.getSetting<UserProfile>('user_profile', {} as any);
+      setProfile(p);
+    };
+    window.addEventListener('profile_updated', handleProfileUpdate);
+    return () => window.removeEventListener('profile_updated', handleProfileUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isOpen]);
+
+  const navigateToPage = useCallback((target: string) => {
+    const pageId = ROUTE_MAP[target];
+    if (pageId) {
+      window.dispatchEvent(new CustomEvent('navigate_to', { detail: { page: pageId } }));
+    }
+  }, []);
+
+  const send = async () => {
+    const content = input.trim();
+    if (!content || generating || !session) return;
+    setInput('');
+    setIsOpen(true);
+
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', content, timestamp: Date.now() };
+    const next = [...messages, userMsg];
+    setMessages(next);
+
+    // Build context-enriched messages for the AI
+    const contextLabel = PAGE_LABELS[currentPage] || currentPage;
+    const systemContext = `[SYSTEM CONTEXT: User is currently viewing "${contextLabel}". User profile: ${JSON.stringify(profile || {})}]`;
+    const messagesForApi = [
+      ...next.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
+      { role: 'user' as const, content: `${systemContext}\n\n${content}` }
+    ];
+
+    const updSession = { ...session, messages: next, updatedAt: Date.now() };
+    await dbManager.saveChat(updSession);
+
+    setGenerating(true);
+    const asstId = `a-${Date.now()}`;
+    setMessages(prev => [...prev, { id: asstId, role: 'assistant', content: '', timestamp: Date.now() }]);
+
+    const config = await dbManager.getSetting('llm_config', { provider: 'sandbox' });
+    let acc = '';
+
+    await streamChat(
+      messagesForApi,
+      config as any,
+      chunk => {
+        acc += chunk;
+        setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: acc } : m));
+      },
+      async () => {
+        // Parse and execute NAVIGATE actions
+        const navMatch = acc.match(/\[ACTION:\s*(\{[^}]*"type"\s*:\s*"NAVIGATE"[^}]*\})\s*\]/);
+        if (navMatch) {
+          try {
+            const action = JSON.parse(navMatch[1]);
+            if (action.target) navigateToPage(action.target);
+          } catch (e) {
+            console.error('Failed to parse NAVIGATE action', e);
+          }
+        }
+
+        const final = [...next, { id: asstId, role: 'assistant' as const, content: acc, timestamp: Date.now() }];
+        const finalSession = { ...session, messages: final, updatedAt: Date.now() };
+        await dbManager.saveChat(finalSession);
+        setGenerating(false);
+      },
+      err => {
+        setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: `⚠️ ${err.message}` } : m));
+        setGenerating(false);
+      },
+    );
+  };
+
+  const handleApproveProfileUpdate = async (msgId: string, payload: Record<string, any>) => {
+    const current = profile || ({} as UserProfile);
+    const updatedProfile = { ...current, ...payload };
+    await dbManager.setSetting('user_profile', updatedProfile);
+    setProfile(updatedProfile as UserProfile);
+    window.dispatchEvent(new Event('profile_updated'));
+
+    setMessages(prev => prev.map(m => {
+      if (m.id === msgId) {
+        return { ...m, content: m.content.replace(/\[ACTION:[^\]]*UPDATE_PROFILE[^\]]*\]/, '\n\n✅ *Profile update applied successfully!*') };
+      }
+      return m;
+    }));
+  };
+
+  const renderContent = (text: string, msgId: string) => {
+    let cleanText = text;
+    let actionBlock: any = null;
+
+    const actionMatch = text.match(/\[ACTION:\s*(\{.*?\})\s*\]/);
+    if (actionMatch) {
+      cleanText = text.replace(actionMatch[0], '');
+      try {
+        actionBlock = JSON.parse(actionMatch[1]);
+      } catch {}
+    }
+
+    // Markdown-like rendering
+    const html = cleanText
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-muted-foreground">$1</li>');
+
+    return (
+      <div className="space-y-2">
+        <div dangerouslySetInnerHTML={{ __html: html }} className="text-[13px] leading-relaxed whitespace-pre-wrap" />
+
+        {actionBlock && actionBlock.type === 'UPDATE_PROFILE' && (
+          <div className="mt-3 rounded-lg border border-deepsea-200 bg-deepsea-50 dark:border-deepsea-900/50 dark:bg-deepsea-900/20 p-3">
+            <p className="text-xs font-semibold text-deepsea-700 dark:text-deepsea-300 mb-2">📝 Requested Profile Update:</p>
+            <pre className="text-[10px] text-muted-foreground mb-3 overflow-x-auto">{JSON.stringify(actionBlock.payload, null, 2)}</pre>
+            <button
+              onClick={() => handleApproveProfileUpdate(msgId, actionBlock.payload)}
+              className="flex items-center gap-1.5 rounded-md bg-deepsea-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-deepsea-700 cursor-pointer"
+            >
+              <CheckCircle className="h-3.5 w-3.5" /> Approve Update
+            </button>
+          </div>
+        )}
+        {actionBlock && actionBlock.type === 'NAVIGATE' && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+            <ArrowRight className="h-3 w-3" /> Navigating to {actionBlock.target}...
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Strip system context prefix from displayed user messages
+  const displayContent = (text: string) => {
+    return text.replace(/\[SYSTEM CONTEXT:[\s\S]*?\]\n\n/, '');
+  };
+
+  const contextLabel = PAGE_LABELS[currentPage] || 'Dashboard';
+
+  return (
+    <>
+      {/* Floating Action Button */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-deepsea-600 text-white shadow-xl hover:bg-deepsea-700 transition-transform hover:scale-105 cursor-pointer"
+        >
+          <Bot className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Chat Panel */}
+      {isOpen && (
+        <div className={
+          mode === 'drawer'
+            ? "fixed bottom-6 right-6 z-50 flex h-[600px] max-h-[80vh] w-[380px] flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
+            : "fixed top-0 right-0 z-40 flex h-screen w-[380px] flex-col border-l border-border bg-card shadow-2xl"
+        }>
+          {/* Header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-deepsea-500/15">
+                <Sparkles className="h-3.5 w-3.5 text-deepsea-600 dark:text-deepsea-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Global Career Agent</p>
+                <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">📍 {contextLabel}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setMode(mode === 'drawer' ? 'sidebar' : 'drawer')}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+                title={mode === 'drawer' ? 'Dock to Sidebar' : 'Float as Drawer'}
+              >
+                {mode === 'drawer' ? <PanelRight className="h-4 w-4" /> : <SidebarIcon className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              >
+                {mode === 'drawer' ? <ChevronDown className="h-4 w-4" /> : <X className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map(msg => (
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[90%] rounded-xl px-4 py-2.5 ${
+                  msg.role === 'user'
+                    ? 'bg-deepsea-600 text-white shadow-sm'
+                    : 'border border-border bg-background text-foreground shadow-sm'
+                }`}>
+                  {msg.role === 'user' ? (
+                    <p className="text-[13px] whitespace-pre-wrap">{displayContent(msg.content)}</p>
+                  ) : (
+                    renderContent(msg.content, msg.id)
+                  )}
+                </div>
+              </div>
+            ))}
+            {generating && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-3 shadow-sm">
+                  <Loader2 className="h-4 w-4 animate-spin text-deepsea-500" />
+                  <span className="text-[13px] text-muted-foreground tracking-widest animate-pulse">...</span>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-border bg-background p-4">
+            <div className="relative">
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder="Ask me anything or say 'take me to Resume Studio'..."
+                className="w-full resize-none rounded-xl border border-border bg-card pl-4 pr-12 py-3 text-[13px] text-foreground focus:border-deepsea-500 focus:outline-none focus:ring-1 focus:ring-deepsea-500 min-h-[50px] max-h-[120px]"
+                rows={1}
+              />
+              <button
+                onClick={() => send()}
+                disabled={!input.trim() || generating}
+                className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg bg-deepsea-600 text-white transition-all hover:bg-deepsea-700 disabled:opacity-50 cursor-pointer"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 text-center">
+              <span className="text-[10px] text-muted-foreground">Enter to send · Shift+Enter for new line</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
