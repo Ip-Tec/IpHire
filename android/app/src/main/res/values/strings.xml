@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IpHire</string>
+    <string name="title_activity_main">IpHire</string>
+    <string name="package_name">ai.iphire.app</string>
+    <string name="custom_url_scheme">ai.iphire.app</string>
+</resources>

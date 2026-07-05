@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { dbManager, Resume } from '@/lib/db';
 import { streamChat } from '@/lib/llm';
-import { Cpu, Terminal, Copy, Check, Play, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { Cpu, Terminal, Copy, Check, Play, Loader2, Sparkles, AlertCircle, Bot } from 'lucide-react';
+import { useAutoPilot } from '@/lib/useAutoPilot';
 
 type WorkflowType = 'linkedin' | 'cold_email' | 'followup';
 
@@ -73,6 +74,9 @@ export const AgentWorkflows: React.FC = () => {
   const [activeLogIndex, setActiveLogIndex] = useState(0);
   const [output, setOutput] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Auto-Pilot
+  const autoPilot = useAutoPilot();
 
   useEffect(() => {
     async function loadResumes() {
@@ -163,6 +167,38 @@ Keep it concise, polite, and express continued enthusiasm for the team.`;
         <p className="text-sm text-muted-foreground">
           Trigger multi-step background agents. Draft outbound pitches, follow-ups, and review pipeline items.
         </p>
+      </div>
+
+      {/* Auto-Pilot Banner */}
+      <div className={`rounded-xl border p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-all ${autoPilot.isAutoPilotActive ? 'border-deepsea-500 bg-deepsea-50 dark:bg-deepsea-950/20' : 'border-border bg-card'}`}>
+        <div className="flex items-start gap-4">
+          <div className={`p-3 rounded-full ${autoPilot.isAutoPilotActive ? 'bg-deepsea-600 text-white shadow-lg animate-pulse' : 'bg-muted text-muted-foreground'}`}>
+            <Bot className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">Autonomous Auto-Pilot (PA Agent)</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md">
+              Enable this to allow IpHire to continuously search for new jobs matching your profile and automatically apply for you in the background while this app or your Chrome extension is active.
+            </p>
+            {autoPilot.isAutoPilotActive && (
+              <p className="text-[11px] font-mono text-deepsea-600 dark:text-deepsea-400 mt-2 font-semibold">
+                Status: {autoPilot.lastAction}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0">
+          <button
+            onClick={() => autoPilot.toggleAutoPilot(!autoPilot.isAutoPilotActive)}
+            className={`px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all cursor-pointer ${
+              autoPilot.isAutoPilotActive 
+                ? 'bg-rose-600 hover:bg-rose-700 text-white' 
+                : 'bg-deepsea-600 hover:bg-deepsea-700 text-white'
+            }`}
+          >
+            {autoPilot.isAutoPilotActive ? 'Disable Auto-Pilot' : 'Engage Auto-Pilot'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

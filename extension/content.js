@@ -18,6 +18,42 @@
       detectFormAndInjectButton();
     });
     observer.observe(document.body, { childList: true, subtree: true });
+
+    // Listen for commands from the background script
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'START_AUTO_APPLY') {
+          console.log("IpHire: Auto-apply triggered externally.");
+          // Ensure data is loaded, then run
+          chrome.runtime.sendMessage({ action: 'get_stored_data' }, (response) => {
+            if (response && response.iphire_data) {
+              activeData = response.iphire_data;
+              runAutofillProcess();
+              sendResponse({ success: true, message: 'Auto-fill completed.' });
+            } else {
+              console.warn("IpHire: No active data found for auto-apply.");
+              sendResponse({ success: false, message: 'No active data.' });
+            }
+          });
+          return true;
+        }
+      });
+    }
+
+    // Listen for messages from the web app (dashboard)
+    window.addEventListener('message', (event) => {
+      // Security check: only accept from same origin
+      if (event.source !== window || !event.data || event.data.source !== 'iphire-web') {
+        return;
+      }
+      
+      if (event.data.action === 'TRIGGER_AUTO_APPLY' && event.data.url) {
+        console.log("IpHire Content Script: Relaying AUTO_APPLY to background for", event.data.url);
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+           chrome.runtime.sendMessage({ action: 'AUTO_APPLY', url: event.data.url });
+        }
+      }
+    });
   }
 
   function listenToPageEvents() {

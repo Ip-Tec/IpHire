@@ -23,5 +23,11 @@
       "js": ["content.js"],
       "run_at": "document_end"
     }
-  ]
+  ],
+  "externally_connectable": {
+    "matches": [
+      "*://localhost:*/*",
+      "*://iphire.ai/*"
+    ]
+  }
 }

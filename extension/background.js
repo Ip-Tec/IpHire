@@ -31,4 +31,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.action === 'AUTO_APPLY') {
+    console.log("Received AUTO_APPLY request from content script for URL:", message.url);
+    chrome.tabs.create({ url: message.url, active: false }, (tab) => {
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (info.status === 'complete' && tabId === tab.id) {
+          chrome.tabs.onUpdated.removeListener(listener);
+          chrome.tabs.sendMessage(tabId, { action: 'START_AUTO_APPLY' });
+        }
+      });
+    });
+    sendResponse({ success: true, message: 'Auto-apply tab launched.' });
+    return true;
+  }
+});
+
+// Listen for messages from the IpHire web application
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  if (request.action === 'AUTO_APPLY') {
+    console.log("Received AUTO_APPLY request from web app for URL:", request.url);
+    
+    // Open the job URL in a new tab
+    chrome.tabs.create({ url: request.url, active: false }, (tab) => {
+      // Wait for the tab to finish loading
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (info.status === 'complete' && tabId === tab.id) {
+          chrome.tabs.onUpdated.removeListener(listener);
+          // Send a message to the content script in that tab to begin auto-filling
+          chrome.tabs.sendMessage(tabId, { action: 'START_AUTO_APPLY' });
+        }
+      });
+    });
+    sendResponse({ success: true, message: 'Auto-apply tab launched.' });
+  }
 });

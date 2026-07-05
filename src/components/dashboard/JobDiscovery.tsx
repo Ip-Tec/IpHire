@@ -693,6 +693,16 @@ Return ONLY a valid JSON block:
                 >
                   <Sparkles className="h-3.5 w-3.5" /> Prepare with AI
                 </button>
+                {activeJob.url && (
+                  <button
+                    onClick={() => {
+                      window.postMessage({ action: 'TRIGGER_AUTO_APPLY', source: 'iphire-web', url: activeJob.url }, '*');
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all cursor-pointer"
+                  >
+                    <ArrowRight className="h-3.5 w-3.5" /> Auto-Apply
+                  </button>
+                )}
               </div>
             </div>
           ) : (
