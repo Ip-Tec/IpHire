@@ -138,4 +138,14 @@ export async function initDbTables(): Promise<void> {
       \`createdAt\` BIGINT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      \`id\` VARCHAR(255) PRIMARY KEY,
+      \`email\` VARCHAR(255) NOT NULL UNIQUE,
+      \`password_hash\` VARCHAR(255) NOT NULL,
+      \`name\` VARCHAR(255) NOT NULL,
+      \`createdAt\` BIGINT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 }

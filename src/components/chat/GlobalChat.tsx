@@ -194,7 +194,35 @@ export function GlobalChat() {
     }));
   };
 
-  const renderContent = (text: string, msgId: string) => {
+  const renderMarkdown = (text: string): string => {
+    return text
+      // Code blocks (``` ... ```)
+      .replace(/```([\s\S]*?)```/g, '<pre class="my-2 rounded-lg bg-muted p-3 text-[11px] overflow-x-auto font-mono"><code>$1</code></pre>')
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code class="rounded bg-muted px-1 py-0.5 text-[11px] font-mono text-pink-500">$1</code>')
+      // H3 headers
+      .replace(/^### (.+)$/gm, '<h3 class="mt-3 mb-1 text-[13px] font-bold text-foreground">$1</h3>')
+      // H2 headers
+      .replace(/^## (.+)$/gm, '<h2 class="mt-3 mb-1 text-[14px] font-bold text-foreground">$1</h2>')
+      // H1 headers
+      .replace(/^# (.+)$/gm, '<h1 class="mt-3 mb-1 text-[15px] font-bold text-foreground">$1</h1>')
+      // Bold
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
+      // Italic
+      .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+      // Numbered lists
+      .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal text-[13px] text-muted-foreground my-0.5">$2</li>')
+      // Bullet lists
+      .replace(/^[-•] (.+)$/gm, '<li class="ml-4 list-disc text-[13px] text-muted-foreground my-0.5">$1</li>')
+      // Wrap consecutive <li> items in <ul>
+      .replace(/(<li[^>]*>.*<\/li>\n?)+/g, m => `<ul class="my-1 space-y-0.5">${m}</ul>`)
+      // Double newlines → paragraph breaks
+      .replace(/\n\n/g, '<br/><br/>')
+      // Single newlines → <br>
+      .replace(/\n/g, '<br/>');
+  };
+
+  const renderContent = (text: string, msgId: string, isStreaming = false) => {
     let cleanText = text;
     let actionBlock: any = null;
 
@@ -206,15 +234,14 @@ export function GlobalChat() {
       } catch {}
     }
 
-    // Markdown-like rendering
-    const html = cleanText
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-muted-foreground">$1</li>');
+    const html = renderMarkdown(cleanText);
 
     return (
       <div className="space-y-2">
-        <div dangerouslySetInnerHTML={{ __html: html }} className="text-[13px] leading-relaxed whitespace-pre-wrap" />
+        <div
+          dangerouslySetInnerHTML={{ __html: html + (isStreaming ? '<span class="inline-block w-2 h-3 ml-0.5 bg-deepsea-500 animate-pulse rounded-sm align-middle"></span>' : '') }}
+          className="text-[13px] leading-relaxed"
+        />
 
         {actionBlock && actionBlock.type === 'UPDATE_PROFILE' && (
           <div className="mt-3 rounded-lg border border-deepsea-200 bg-deepsea-50 dark:border-deepsea-900/50 dark:bg-deepsea-900/20 p-3">
@@ -243,6 +270,68 @@ export function GlobalChat() {
   };
 
   const contextLabel = PAGE_LABELS[currentPage] || 'Dashboard';
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    
+    // Clear the input so the same file can be uploaded again if needed
+    e.target.value = '';
+    
+    // Show uploading message
+    const msgId = `u-${Date.now()}`;
+    const uploadingMsg: ChatMessage = { 
+      id: msgId, 
+      role: 'user', 
+      content: `[Uploading file: ${file.name}...]`, 
+      timestamp: Date.now() 
+    };
+    const next = [...messages, uploadingMsg];
+    setMessages(next);
+    setGenerating(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await fetch('/api/parse-file', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to parse file');
+      }
+
+      // Replace uploading message with actual file content context
+      const fileContextMsg: ChatMessage = {
+        id: msgId,
+        role: 'user',
+        content: `I have uploaded a file named "${file.name}". Here is its extracted text:\n\n${data.text}\n\nPlease acknowledge receipt.`,
+        timestamp: Date.now()
+      };
+      
+      const updatedMessages = [...messages, fileContextMsg];
+      setMessages(updatedMessages);
+      
+      const updSession = { ...session, messages: updatedMessages, updatedAt: Date.now() };
+      await dbManager.saveChat(updSession);
+      
+      // Auto-trigger send to have AI acknowledge
+      setInput(`I just uploaded ${file.name}.`);
+      setGenerating(false);
+      // Let the user press send manually, or we can auto-send. We'll auto-send.
+      setTimeout(() => {
+        const fakeEvent = { preventDefault: () => {} } as any;
+        document.getElementById('ai-chat-send-btn')?.click();
+      }, 100);
+
+    } catch (err: any) {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: `⚠️ Error uploading ${file.name}: ${err.message}` } : m));
+      setGenerating(false);
+    }
+  };
 
   return (
     <>
@@ -286,33 +375,41 @@ export function GlobalChat() {
                 onClick={() => setIsOpen(false)}
                 className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
               >
-                {mode === 'drawer' ? <ChevronDown className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                <X className="h-4 w-4" />
               </button>
             </div>
           </div>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[90%] rounded-xl px-4 py-2.5 ${
-                  msg.role === 'user'
-                    ? 'bg-deepsea-600 text-white shadow-sm'
-                    : 'border border-border bg-background text-foreground shadow-sm'
-                }`}>
-                  {msg.role === 'user' ? (
-                    <p className="text-[13px] whitespace-pre-wrap">{displayContent(msg.content)}</p>
-                  ) : (
-                    renderContent(msg.content, msg.id)
-                  )}
+            {messages.map((msg, idx) => {
+              // The last assistant message while generating = streaming in progress
+              const isStreamingMsg = generating && msg.role === 'assistant' && idx === messages.length - 1;
+              // Show the spinner bubble only if content is still empty (AI hasn't sent first chunk yet)
+              const isWaitingForFirstChunk = isStreamingMsg && msg.content === '';
+              if (isWaitingForFirstChunk) return null; // Will be replaced by spinner below
+              return (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[90%] rounded-xl px-4 py-2.5 ${
+                    msg.role === 'user'
+                      ? 'bg-deepsea-600 text-white shadow-sm'
+                      : 'border border-border bg-background text-foreground shadow-sm'
+                  }`}>
+                    {msg.role === 'user' ? (
+                      <p className="text-[13px] whitespace-pre-wrap">{displayContent(msg.content)}</p>
+                    ) : (
+                      renderContent(msg.content, msg.id, isStreamingMsg)
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {generating && (
+              );
+            })}
+            {/* Spinner: shown only while waiting for the very first token */}
+            {generating && messages[messages.length - 1]?.content === '' && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-3 shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin text-deepsea-500" />
-                  <span className="text-[13px] text-muted-foreground tracking-widest animate-pulse">...</span>
+                  <span className="text-[13px] text-muted-foreground">Thinking...</span>
                 </div>
               </div>
             )}
@@ -321,7 +418,11 @@ export function GlobalChat() {
 
           {/* Input */}
           <div className="border-t border-border bg-background p-4">
-            <div className="relative">
+            <div className="relative flex items-center gap-2">
+              <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                <input type="file" className="hidden" accept=".pdf,.docx,.txt" onChange={handleFileUpload} disabled={generating} />
+              </label>
               <textarea
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -332,10 +433,11 @@ export function GlobalChat() {
                   }
                 }}
                 placeholder="Ask me anything or say 'take me to Resume Studio'..."
-                className="w-full resize-none rounded-xl border border-border bg-card pl-4 pr-12 py-3 text-[13px] text-foreground focus:border-deepsea-500 focus:outline-none focus:ring-1 focus:ring-deepsea-500 min-h-[50px] max-h-[120px]"
+                className="w-full resize-none rounded-xl border border-border bg-card pl-4 pr-12 py-3 text-[13px] text-foreground focus:border-deepsea-500 focus:outline-none focus:ring-1 focus:ring-deepsea-500 min-h-[46px] max-h-[120px]"
                 rows={1}
               />
               <button
+                id="ai-chat-send-btn"
                 onClick={() => send()}
                 disabled={!input.trim() || generating}
                 className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg bg-deepsea-600 text-white transition-all hover:bg-deepsea-700 disabled:opacity-50 cursor-pointer"

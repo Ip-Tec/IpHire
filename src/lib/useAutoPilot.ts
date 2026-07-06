@@ -33,7 +33,7 @@ export function useAutoPilot() {
 
   const toggleAutoPilot = async (enabled: boolean) => {
     setIsAutoPilotActive(enabled);
-    await dbManager.saveSetting('auto_pilot_enabled', enabled);
+    await dbManager.setSetting('auto_pilot_enabled', enabled);
   };
 
   const runAutoPilotCycle = async () => {
