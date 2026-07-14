@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { GlobalChat } from '@/components/chat/GlobalChat';
@@ -18,42 +20,52 @@ import { AgentWorkflows } from '@/components/dashboard/AgentWorkflows';
 import { PortfolioBuilder } from '@/components/dashboard/PortfolioBuilder';
 import { CareerAnalytics } from '@/components/dashboard/CareerAnalytics';
 import { UserProfileStudio } from '@/components/dashboard/UserProfileStudio';
+import { AutoPilot } from '@/components/dashboard/AutoPilot';
 import { dbManager, Resume, UserProfile } from '@/lib/db';
 import {
   LayoutDashboard, FileText, Briefcase, Settings,
-  Award, CheckCircle2, TrendingUp, Sparkles, BookOpen,
-  Mail, Search, LayoutGrid, Calendar,
+  BookOpen, Mail, Search, LayoutGrid, Calendar,
   MousePointer, Cpu, Globe, BarChart2, User, MessageSquare,
-  Bell, X
+  Bell, X, LogOut, Zap, Award, CheckCircle2, TrendingUp, Sparkles
 } from 'lucide-react';
 
-type ActivePage = 'dashboard' | 'profile' | 'resume' | 'cover' | 'analyzer' | 'discovery' | 'tracker' | 'gap' | 'coach' | 'scheduler' | 'autofill' | 'workflows' | 'portfolio' | 'analytics' | 'settings';
+type ActivePage = 'dashboard' | 'profile' | 'resume' | 'cover' | 'analyzer' | 'discovery' | 'tracker' | 'gap' | 'coach' | 'scheduler' | 'autofill' | 'autopilot' | 'workflows' | 'portfolio' | 'analytics' | 'settings';
 
 const NAV_LINKS = [
-  { id: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard },
-  { id: 'profile',   label: 'My Profile',      icon: User },
-  { id: 'resume',    label: 'Resume Studio',   icon: FileText },
-  { id: 'cover',     label: 'Cover Letters',   icon: Mail },
-  { id: 'analyzer',  label: 'Job Analyzer',    icon: Briefcase },
-  { id: 'discovery', label: 'Job Discovery',   icon: Search },
-  { id: 'tracker',   label: 'App Tracker',     icon: LayoutGrid },
-  { id: 'gap',       label: 'Skill Gap',       icon: BookOpen },
-  { id: 'coach',     label: 'Interview Coach', icon: MessageSquare },
-  { id: 'scheduler', label: 'Scheduler',       icon: Calendar },
-  { id: 'autofill',  label: 'Auto-Fill Tools', icon: MousePointer },
-  { id: 'workflows', label: 'AI Workflows',    icon: Cpu },
-  { id: 'portfolio', label: 'Web Builder',     icon: Globe },
-  { id: 'analytics', label: 'Analytics',       icon: BarChart2 },
-  { id: 'settings',  label: 'BYOK Settings',   icon: Settings },
+  { id: 'dashboard',  label: 'Dashboard',       icon: LayoutDashboard },
+  { id: 'profile',    label: 'My Profile',      icon: User },
+  { id: 'autopilot',  label: '🚀 Auto-Pilot',   icon: Zap },
+  { id: 'resume',     label: 'Resume Studio',   icon: FileText },
+  { id: 'cover',      label: 'Cover Letters',   icon: Mail },
+  { id: 'analyzer',   label: 'Job Analyzer',    icon: Briefcase },
+  { id: 'discovery',  label: 'Job Discovery',   icon: Search },
+  { id: 'tracker',    label: 'App Tracker',     icon: LayoutGrid },
+  { id: 'gap',        label: 'Skill Gap',       icon: BookOpen },
+  { id: 'coach',      label: 'Interview Coach', icon: MessageSquare },
+  { id: 'scheduler',  label: 'Scheduler',       icon: Calendar },
+  { id: 'autofill',   label: 'Auto-Fill Tools', icon: MousePointer },
+  { id: 'workflows',  label: 'AI Workflows',    icon: Cpu },
+  { id: 'portfolio',  label: 'Web Builder',     icon: Globe },
+  { id: 'analytics',  label: 'Analytics',       icon: BarChart2 },
+  { id: 'settings',   label: 'BYOK Settings',   icon: Settings },
 ];
 
 export default function DashboardPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [activePage, setActivePage]   = useState<ActivePage>('dashboard');
   const [activeResume, setActiveResume] = useState<Resume | null>(null);
   
-  // Dynamic profile metadata
-  const [profileName, setProfileName] = useState('Alex Rivera');
-  const [profileInitials, setProfileInitials] = useState('AR');
+  // Dynamic profile metadata — prefer session data, fallback to local profile
+  const [profileName, setProfileName] = useState('Loading...');
+  const [profileInitials, setProfileInitials] = useState('?');
+
+  // Client-side auth guard
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+    }
+  }, [status, router]);
 
   // Notification state
   type Notif = { id: string; type: 'job' | 'reminder' | 'system'; title: string; body: string; time: string; read: boolean };
@@ -62,17 +74,18 @@ export default function DashboardPage() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const fetchProfile = () => {
-    dbManager.getSetting<Partial<UserProfile>>('user_profile', { name: 'Alex Rivera' }).then(prof => {
-      const name = prof.name || 'Alex Rivera';
+    // Use session name first, then fall back to stored profile
+    const sessionName = session?.user?.name;
+    dbManager.getSetting<Partial<UserProfile>>('user_profile', { name: sessionName || 'User' }).then(prof => {
+      const name = prof.name || sessionName || 'User';
       setProfileName(name);
-      
       const initials = name
         .split(' ')
-        .map(p => p[0])
+        .map((p: string) => p[0])
         .slice(0, 2)
         .join('')
         .toUpperCase();
-      setProfileInitials(initials || 'AR');
+      setProfileInitials(initials || 'U');
     });
   };
 
@@ -123,22 +136,33 @@ export default function DashboardPage() {
   }, []);
 
   const renderPanel = () => {
+    if (status === 'loading' || status === 'unauthenticated') {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-deepsea-500 border-t-transparent" />
+            <p className="text-sm">Loading your workspace...</p>
+          </div>
+        </div>
+      );
+    }
     switch (activePage) {
-      case 'profile':   return <UserProfileStudio />;
-      case 'resume':    return <ResumeStudio />;
-      case 'cover':     return <CoverLetterStudio />;
-      case 'analyzer':  return <JobAnalyzer />;
-      case 'discovery': return <JobDiscovery />;
-      case 'tracker':   return <AppTracker />;
-      case 'gap':       return <SkillGapAnalyzer />;
-      case 'coach':     return <InterviewCoach />;
-      case 'scheduler': return <InterviewScheduler />;
-      case 'autofill':  return <AutoFillStudio />;
-      case 'workflows': return <AgentWorkflows />;
-      case 'portfolio': return <PortfolioBuilder />;
-      case 'analytics': return <CareerAnalytics />;
-      case 'settings':  return <SettingsBYOK />;
-      default:          return <DashboardOverview resumeScore={activeResume?.score ?? 75} resumeName={activeResume?.name ?? 'Master Resume'} />;
+      case 'profile':    return <UserProfileStudio />;
+      case 'resume':     return <ResumeStudio />;
+      case 'cover':      return <CoverLetterStudio />;
+      case 'analyzer':   return <JobAnalyzer />;
+      case 'discovery':  return <JobDiscovery />;
+      case 'tracker':    return <AppTracker />;
+      case 'gap':        return <SkillGapAnalyzer />;
+      case 'coach':      return <InterviewCoach />;
+      case 'scheduler':  return <InterviewScheduler />;
+      case 'autofill':   return <AutoFillStudio />;
+      case 'autopilot':  return <AutoPilot />;
+      case 'workflows':  return <AgentWorkflows />;
+      case 'portfolio':  return <PortfolioBuilder />;
+      case 'analytics':  return <CareerAnalytics />;
+      case 'settings':   return <SettingsBYOK />;
+      default:           return <DashboardOverview resumeScore={activeResume?.score ?? 75} resumeName={activeResume?.name ?? 'Master Resume'} />;
     }
   };
 
@@ -171,8 +195,8 @@ export default function DashboardPage() {
           ))}
         </nav>
 
-        {/* User + Theme */}
-        <div className="border-t border-border p-3">
+        {/* User + Theme + Sign Out */}
+        <div className="border-t border-border p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-deepsea-500/15 text-xs font-bold text-deepsea-700 dark:text-deepsea-300">
@@ -180,11 +204,18 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-foreground">{profileName}</p>
-                <p className="text-[10px] text-muted-foreground">Active User</p>
+                <p className="truncate text-[10px] text-muted-foreground">{session?.user?.email ?? 'Signed in'}</p>
               </div>
             </div>
             <ThemeToggle />
           </div>
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Sign Out
+          </button>
         </div>
       </aside>
 

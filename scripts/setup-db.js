@@ -51,6 +51,28 @@ async function createDatabase() {
       \`createdAt\` BIGINT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+    await conn.query(`CREATE TABLE IF NOT EXISTS autopilot_runs (
+      \`id\` VARCHAR(255) PRIMARY KEY,
+      \`status\` VARCHAR(255) NOT NULL,
+      \`jobsFound\` INT NOT NULL,
+      \`jobsApplied\` INT NOT NULL,
+      \`logs\` LONGTEXT NOT NULL,
+      \`createdAt\` BIGINT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await conn.query(`CREATE TABLE IF NOT EXISTS autopilot_jobs (
+      \`id\` VARCHAR(255) PRIMARY KEY,
+      \`runId\` VARCHAR(255) NOT NULL,
+      \`jobId\` VARCHAR(255) NOT NULL,
+      \`title\` VARCHAR(255) NOT NULL,
+      \`company\` VARCHAR(255) NOT NULL,
+      \`score\` INT NOT NULL,
+      \`matchReasoning\` LONGTEXT NOT NULL,
+      \`status\` VARCHAR(255) NOT NULL,
+      \`formFields\` LONGTEXT,
+      \`createdAt\` BIGINT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
     await conn.query(`CREATE TABLE IF NOT EXISTS resumes (
       \`id\` VARCHAR(255) PRIMARY KEY,
       \`name\` VARCHAR(255) NOT NULL,
