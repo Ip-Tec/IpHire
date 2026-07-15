@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDbPool, initDbTables } from "@/lib/tidb";
+import { getDbPool } from "@/lib/tidb";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 
@@ -12,9 +12,6 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getDbPool();
-
-    // Ensure tables exist before any query
-    await initDbTables();
 
     const [existing]: any = await db.query("SELECT id FROM users WHERE email = ?", [email]);
 
@@ -37,4 +34,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

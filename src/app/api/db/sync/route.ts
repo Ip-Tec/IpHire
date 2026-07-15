@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDbPool, initDbTables, testDbConnection } from '@/lib/tidb';
+import { getDbPool, testDbConnection } from '@/lib/tidb';
 
 export async function GET() {
   try {
@@ -7,8 +7,6 @@ export async function GET() {
     if (!connTest.success) {
       return NextResponse.json({ success: false, message: connTest.message }, { status: 500 });
     }
-
-    await initDbTables();
 
     // Fetch all current database states to verify pulling
     const db = getDbPool();
@@ -46,7 +44,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: connTest.message }, { status: 500 });
     }
 
-    await initDbTables();
     const db = getDbPool();
     const body = await req.json();
 

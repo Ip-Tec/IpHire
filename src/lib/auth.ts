@@ -1,7 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
-import { getDbPool, initDbTables } from "./tidb";
+import { getDbPool } from "./tidb";
 
 
 export const authOptions: NextAuthOptions = {
@@ -17,9 +17,6 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Missing email or password");
         }
         const db = getDbPool();
-
-        // Ensure tables exist before any query
-        await initDbTables();
 
         const [rows]: any = await db.query("SELECT * FROM users WHERE email = ?", [credentials.email]);
         const user = rows[0];
