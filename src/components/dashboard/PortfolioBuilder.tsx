@@ -235,6 +235,19 @@ export const PortfolioBuilder: React.FC = () => {
     document.body.removeChild(a);
   };
 
+  const handlePrintPdf = () => {
+    if (!htmlCode) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(
+      htmlCode.replace(
+        '<body>',
+        '<body><div class="no-print" style="background:#f0f0f0;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font-family:system-ui,sans-serif;font-size:13px;color:#333;border-bottom:1px solid #ddd;"><span style="font-weight:500;">💡 Use <strong>Ctrl+P</strong> or <strong>⌘P</strong> and set destination to <strong>Save as PDF</strong>.</span><button onclick="window.print()" style="background:#006d77;color:white;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;">🖨️ Save PDF</button></div><style>@media print{.no-print{display:none !important;}}</style>'
+      )
+    );
+    win.document.close();
+  };
+
   return (
     <div className="space-y-6">
       
@@ -324,14 +337,33 @@ export const PortfolioBuilder: React.FC = () => {
             </div>
           </div>
 
+          {/* Info Card explaining differences & PDF option */}
+          <div className="rounded-xl border border-deepsea-500/20 bg-deepsea-500/5 p-4 text-[11px] leading-relaxed text-muted-foreground space-y-1 shadow-sm">
+            <p className="font-bold text-foreground flex items-center gap-1">ℹ️ Web Portfolio vs PDF CV</p>
+            <p>
+              This builder compiles a single-file responsive website (`index.html`) to host online.
+              To get a standard PDF Resume, go to the <strong>Resume Studio</strong> tab instead, or export this website layout as PDF below.
+            </p>
+          </div>
+
           {/* Download Action */}
-          <button
-            onClick={handleDownload}
-            disabled={!htmlCode}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-deepsea-600 py-2.5 text-xs font-semibold text-white hover:bg-deepsea-700 active:scale-95 transition-all disabled:opacity-60 cursor-pointer"
-          >
-            <Download className="h-4 w-4" /> Download index.html Code
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleDownload}
+              disabled={!htmlCode}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-deepsea-600 py-2 text-xs font-semibold text-white hover:bg-deepsea-700 active:scale-95 transition-all disabled:opacity-60 cursor-pointer shadow-sm"
+            >
+              <Download className="h-4 w-4" /> Download index.html Code
+            </button>
+
+            <button
+              onClick={handlePrintPdf}
+              disabled={!htmlCode}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-60 cursor-pointer shadow-sm"
+            >
+              <FileText className="h-4 w-4" /> Print / Save PDF Portfolio
+            </button>
+          </div>
         </div>
 
         {/* Right Iframe Live Sandbox Preview */}

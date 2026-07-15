@@ -188,11 +188,12 @@ class IndexedDBManager {
   public async setSetting<T>(key: string, value: T): Promise<void> {
     try {
       const store = await this.getStore('settings', 'readwrite');
-      return new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const request = store.put(value, key);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
       });
+      this.syncCloud().catch(err => console.error("Auto-sync settings failed:", err));
     } catch (e) {
       console.error("Failed to write to IndexedDB settings:", e);
     }
@@ -217,20 +218,22 @@ class IndexedDBManager {
 
   public async saveResume(resume: Resume): Promise<void> {
     const store = await this.getStore('resumes', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.put(resume);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync resumes failed:", err));
   }
 
   public async deleteResume(id: string): Promise<void> {
     const store = await this.getStore('resumes', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync resume deletion failed:", err));
   }
 
   // --- Cover Letters ---
@@ -252,20 +255,22 @@ class IndexedDBManager {
 
   public async saveCoverLetter(letter: CoverLetter): Promise<void> {
     const store = await this.getStore('coverLetters', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.put(letter);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync cover letter failed:", err));
   }
 
   public async deleteCoverLetter(id: string): Promise<void> {
     const store = await this.getStore('coverLetters', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync cover letter deletion failed:", err));
   }
 
   // --- Chats ---
@@ -300,20 +305,22 @@ class IndexedDBManager {
 
   public async saveChat(chat: ChatSession): Promise<void> {
     const store = await this.getStore('chats', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.put(chat);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync chat failed:", err));
   }
 
   public async deleteChat(id: string): Promise<void> {
     const store = await this.getStore('chats', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync chat deletion failed:", err));
   }
 
   // --- Phase 2: Applications ---
@@ -334,20 +341,22 @@ class IndexedDBManager {
 
   public async saveApplication(app: Application): Promise<void> {
     const store = await this.getStore('applications', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.put(app);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync application failed:", err));
   }
 
   public async deleteApplication(id: string): Promise<void> {
     const store = await this.getStore('applications', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync application deletion failed:", err));
   }
 
   // --- Phase 2: Interviews ---
@@ -369,20 +378,22 @@ class IndexedDBManager {
 
   public async saveInterview(int: Interview): Promise<void> {
     const store = await this.getStore('interviews', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.put(int);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync interview failed:", err));
   }
 
   public async deleteInterview(id: string): Promise<void> {
     const store = await this.getStore('interviews', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync interview deletion failed:", err));
   }
 
   // --- Phase 2: Saved Jobs ---
@@ -404,20 +415,22 @@ class IndexedDBManager {
 
   public async saveJob(job: Job): Promise<void> {
     const store = await this.getStore('savedJobs', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.put(job);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync job failed:", err));
   }
 
   public async deleteJob(id: string): Promise<void> {
     const store = await this.getStore('savedJobs', 'readwrite');
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    this.syncCloud().catch(err => console.error("Auto-sync job deletion failed:", err));
   }
 
   public async getAllSettings(): Promise<Record<string, any>> {

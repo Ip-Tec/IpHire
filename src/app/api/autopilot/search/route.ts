@@ -37,6 +37,45 @@ async function getChatResponseText(stream: ReadableStream): Promise<string> {
   return text;
 }
 
+function parseJSONResponse(rawText: string): any {
+  let cleanText = rawText.trim();
+  
+  // Remove markdown code fences if present
+  if (cleanText.includes("```")) {
+    const match = cleanText.match(/```(json)?([\s\S]*?)```/);
+    if (match && match[2]) {
+      cleanText = match[2].trim();
+    }
+  }
+  
+  // Extract only the JSON object boundaries
+  const startIdx = cleanText.indexOf('{');
+  const endIdx = cleanText.lastIndexOf('}');
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    cleanText = cleanText.substring(startIdx, endIdx + 1);
+  }
+  
+  try {
+    return JSON.parse(cleanText);
+  } catch (err) {
+    console.warn("[Autopilot Search] Failed to parse AI response JSON, attempting repair:", cleanText);
+    
+    // Try simple regex repair for {"score": <num>
+    const scoreMatch = cleanText.match(/"score"\s*:\s*(\d+)/);
+    if (scoreMatch) {
+      const score = parseInt(scoreMatch[1]);
+      let reasoning = "AI evaluated match.";
+      const reasoningMatch = cleanText.match(/"reasoning"\s*:\s*"([^"]*)"?/);
+      if (reasoningMatch && reasoningMatch[1]) {
+        reasoning = reasoningMatch[1];
+      }
+      return { score, reasoning };
+    }
+    throw err;
+  }
+}
+
+
 export async function POST(req: NextRequest) {
   const db = getDbPool();
   const runId = crypto.randomUUID();
@@ -88,8 +127,17 @@ export async function POST(req: NextRequest) {
     const keywords = (profile.preferredRoles && profile.preferredRoles.length > 0)
       ? profile.preferredRoles[0]
       : (profile.title || "Software Developer");
-    const location = profile.location || "Remote";
-
+    
+    // Determine location: respect remote only preference
+    let location = profile.location || "Remote";
+    if (
+      profile.remotePreferences === "remote" || 
+      profile.remotePreferences === "remote only" || 
+      profile.remotePreferences?.toLowerCase().includes("remote")
+    ) {
+      location = "Remote";
+    }
+ 
     log(`Searching for "${keywords}" in "${location}"`);
 
     let jobsList: any[] = [];
@@ -234,7 +282,15 @@ export async function POST(req: NextRequest) {
     const jobsToProcess = unexaminedJobs.slice(0, 5);
     log(`Scoring top ${jobsToProcess.length} jobs using AI...`);
 
-    for (const job of jobsToProcess) {
+    for (let i = 0; i < jobsToProcess.length; i++) {
+      const job = jobsToProcess[i];
+      
+      // Cooldown delay between loops to prevent hitting rate limits (e.g. 429) for Gemini free tier
+      if (i > 0) {
+        log(`Waiting 2 seconds cooldown to avoid rate limits...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
       log(`Evaluating: "${job.title}" at "${job.company}"`);
 
       let score = 50;
@@ -247,6 +303,7 @@ export async function POST(req: NextRequest) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              systemPrompt: "", // Bypass chatbot SYSTEM_PROMPT to output exact JSON
               messages: [
                 {
                   role: "user",
@@ -272,20 +329,19 @@ Your output MUST be a JSON object ONLY on a single line containing exactly:
               config: {
                 ...llmConfig,
                 temperature: 0.1,
-                maxTokens: 150
+                maxTokens: 350 // Increased token limit to prevent JSON truncation
               }
             })
           });
 
           if (chatRes.ok && chatRes.body) {
             const rawText = await getChatResponseText(chatRes.body);
-            const jsonMatch = rawText.match(/\{.*\}/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
+            try {
+              const parsed = parseJSONResponse(rawText);
               score = typeof parsed.score === "number" ? parsed.score : 50;
               reasoning = parsed.reasoning || "AI analyzed match.";
-            } else {
-              log(`Failed to parse AI response JSON: "${rawText}"`);
+            } catch (parseErr: any) {
+              log(`Failed to parse AI response JSON: "${rawText}". Error: ${parseErr.message}`);
             }
           } else {
             log(`AI chat call failed with status ${chatRes.status}`);

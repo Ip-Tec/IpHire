@@ -29,25 +29,15 @@ import {
   Bell, X, LogOut, Zap, Award, CheckCircle2, TrendingUp, Sparkles
 } from 'lucide-react';
 
-type ActivePage = 'dashboard' | 'profile' | 'resume' | 'cover' | 'analyzer' | 'discovery' | 'tracker' | 'gap' | 'coach' | 'scheduler' | 'autofill' | 'autopilot' | 'workflows' | 'portfolio' | 'analytics' | 'settings';
+type ActivePage = 'dashboard' | 'autopilot' | 'resume' | 'interviews' | 'tools' | 'settings';
 
 const NAV_LINKS = [
-  { id: 'dashboard',  label: 'Dashboard',       icon: LayoutDashboard },
-  { id: 'profile',    label: 'My Profile',      icon: User },
-  { id: 'autopilot',  label: '🚀 Auto-Pilot',   icon: Zap },
-  { id: 'resume',     label: 'Resume Studio',   icon: FileText },
-  { id: 'cover',      label: 'Cover Letters',   icon: Mail },
-  { id: 'analyzer',   label: 'Job Analyzer',    icon: Briefcase },
-  { id: 'discovery',  label: 'Job Discovery',   icon: Search },
-  { id: 'tracker',    label: 'App Tracker',     icon: LayoutGrid },
-  { id: 'gap',        label: 'Skill Gap',       icon: BookOpen },
-  { id: 'coach',      label: 'Interview Coach', icon: MessageSquare },
-  { id: 'scheduler',  label: 'Scheduler',       icon: Calendar },
-  { id: 'autofill',   label: 'Auto-Fill Tools', icon: MousePointer },
-  { id: 'workflows',  label: 'AI Workflows',    icon: Cpu },
-  { id: 'portfolio',  label: 'Web Builder',     icon: Globe },
-  { id: 'analytics',  label: 'Analytics',       icon: BarChart2 },
-  { id: 'settings',   label: 'BYOK Settings',   icon: Settings },
+  { id: 'dashboard',  label: 'Dashboard',          icon: LayoutDashboard },
+  { id: 'autopilot',  label: 'Auto-Pilot & Jobs',  icon: Zap },
+  { id: 'resume',     label: 'Resume & Profile',   icon: FileText },
+  { id: 'interviews', label: 'Interview Prep',     icon: MessageSquare },
+  { id: 'tools',      label: 'AI Tools',           icon: Cpu },
+  { id: 'settings',   label: 'BYOK Settings',      icon: Settings },
 ];
 
 export default function DashboardPage() {
@@ -55,6 +45,13 @@ export default function DashboardPage() {
   const router = useRouter();
   const [activePage, setActivePage]   = useState<ActivePage>('dashboard');
   const [activeResume, setActiveResume] = useState<Resume | null>(null);
+
+  // Sub-tabs states
+  const [dashboardTab, setDashboardTab] = useState<'overview' | 'analytics'>('overview');
+  const [jobsTab, setJobsTab] = useState<'autopilot' | 'tracker' | 'discovery' | 'analyzer'>('autopilot');
+  const [resumeTab, setResumeTab] = useState<'resume' | 'cover' | 'profile' | 'portfolio'>('resume');
+  const [interviewTab, setInterviewTab] = useState<'coach' | 'scheduler'>('coach');
+  const [toolsTab, setToolsTab] = useState<'gap' | 'autofill' | 'workflows'>('gap');
   
   // Dynamic profile metadata — prefer session data, fallback to local profile
   const [profileName, setProfileName] = useState('Loading...');
@@ -91,16 +88,70 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchProfile();
+    // Auto-sync on load to pull any remote cloud settings/resumes from TiDB
+    dbManager.syncCloud().then((syncRes) => {
+      if (syncRes.success) {
+        fetchProfile();
+      }
+    }).catch(err => console.error("Initial load sync failed:", err));
     
     // Listen for custom profile update events
     if (typeof window !== 'undefined') {
       window.addEventListener('profile_updated', fetchProfile);
 
-      // Listen for AI navigation commands from GlobalChat
+      // Listen for AI navigation commands from GlobalChat (with backward-compatible mapping)
       const handleNavigateTo = (e: Event) => {
         const detail = (e as CustomEvent).detail;
-        if (detail?.page) {
-          setActivePage(detail.page as ActivePage);
+        const page = detail?.page;
+        if (!page) return;
+
+        if (page === 'dashboard') {
+          setActivePage('dashboard');
+          setDashboardTab('overview');
+        } else if (page === 'analytics') {
+          setActivePage('dashboard');
+          setDashboardTab('analytics');
+        } else if (page === 'profile') {
+          setActivePage('resume');
+          setResumeTab('profile');
+        } else if (page === 'resume') {
+          setActivePage('resume');
+          setResumeTab('resume');
+        } else if (page === 'cover') {
+          setActivePage('resume');
+          setResumeTab('cover');
+        } else if (page === 'portfolio') {
+          setActivePage('resume');
+          setResumeTab('portfolio');
+        } else if (page === 'autopilot') {
+          setActivePage('autopilot');
+          setJobsTab('autopilot');
+        } else if (page === 'tracker') {
+          setActivePage('autopilot');
+          setJobsTab('tracker');
+        } else if (page === 'discovery') {
+          setActivePage('autopilot');
+          setJobsTab('discovery');
+        } else if (page === 'analyzer') {
+          setActivePage('autopilot');
+          setJobsTab('analyzer');
+        } else if (page === 'coach') {
+          setActivePage('interviews');
+          setInterviewTab('coach');
+        } else if (page === 'scheduler') {
+          setActivePage('interviews');
+          setInterviewTab('scheduler');
+        } else if (page === 'gap') {
+          setActivePage('tools');
+          setToolsTab('gap');
+        } else if (page === 'autofill') {
+          setActivePage('tools');
+          setToolsTab('autofill');
+        } else if (page === 'workflows') {
+          setActivePage('tools');
+          setToolsTab('workflows');
+        } else if (page === 'settings') {
+          setActivePage('settings');
         }
       };
       window.addEventListener('navigate_to', handleNavigateTo);
@@ -147,22 +198,183 @@ export default function DashboardPage() {
       );
     }
     switch (activePage) {
-      case 'profile':    return <UserProfileStudio />;
-      case 'resume':     return <ResumeStudio />;
-      case 'cover':      return <CoverLetterStudio />;
-      case 'analyzer':   return <JobAnalyzer />;
-      case 'discovery':  return <JobDiscovery />;
-      case 'tracker':    return <AppTracker />;
-      case 'gap':        return <SkillGapAnalyzer />;
-      case 'coach':      return <InterviewCoach />;
-      case 'scheduler':  return <InterviewScheduler />;
-      case 'autofill':   return <AutoFillStudio />;
-      case 'autopilot':  return <AutoPilot />;
-      case 'workflows':  return <AgentWorkflows />;
-      case 'portfolio':  return <PortfolioBuilder />;
-      case 'analytics':  return <CareerAnalytics />;
-      case 'settings':   return <SettingsBYOK />;
-      default:           return <DashboardOverview resumeScore={activeResume?.score ?? 75} resumeName={activeResume?.name ?? 'Master Resume'} />;
+      case 'dashboard':
+        return (
+          <div className="space-y-6">
+            <div className="flex border-b border-border pb-2 gap-4">
+              <button
+                onClick={() => setDashboardTab('overview')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${dashboardTab === 'overview' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setDashboardTab('analytics')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${dashboardTab === 'analytics' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Analytics
+              </button>
+            </div>
+            <div className="pt-4">
+              {dashboardTab === 'overview' ? (
+                <DashboardOverview resumeScore={activeResume?.score ?? 75} resumeName={activeResume?.name ?? 'Master Resume'} />
+              ) : (
+                <CareerAnalytics />
+              )}
+            </div>
+          </div>
+        );
+      case 'autopilot':
+        return (
+          <div className="space-y-6">
+            <div className="flex border-b border-border pb-2 gap-4">
+              <button
+                onClick={() => setJobsTab('autopilot')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${jobsTab === 'autopilot' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Auto-Pilot Agent
+              </button>
+              <button
+                onClick={() => setJobsTab('tracker')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${jobsTab === 'tracker' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Application Tracker
+              </button>
+              <button
+                onClick={() => setJobsTab('discovery')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${jobsTab === 'discovery' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Job Search & Discovery
+              </button>
+              <button
+                onClick={() => setJobsTab('analyzer')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${jobsTab === 'analyzer' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Job Description Analyzer
+              </button>
+            </div>
+            <div className="pt-4">
+              {jobsTab === 'autopilot' && <AutoPilot />}
+              {jobsTab === 'tracker' && <AppTracker />}
+              {jobsTab === 'discovery' && <JobDiscovery />}
+              {jobsTab === 'analyzer' && <JobAnalyzer />}
+            </div>
+          </div>
+        );
+      case 'resume':
+        return (
+          <div className="space-y-6">
+            <div className="flex border-b border-border pb-2 gap-4">
+              <button
+                onClick={() => setResumeTab('resume')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${resumeTab === 'resume' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Resume Studio
+              </button>
+              <button
+                onClick={() => setResumeTab('cover')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${resumeTab === 'cover' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Cover Letters
+              </button>
+              <button
+                onClick={() => setResumeTab('profile')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${resumeTab === 'profile' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                My Profile Details
+              </button>
+              <button
+                onClick={() => setResumeTab('portfolio')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${resumeTab === 'portfolio' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                CV Web Builder
+              </button>
+            </div>
+            <div className="pt-4">
+              {resumeTab === 'resume' && <ResumeStudio />}
+              {resumeTab === 'cover' && <CoverLetterStudio />}
+              {resumeTab === 'profile' && <UserProfileStudio />}
+              {resumeTab === 'portfolio' && <PortfolioBuilder />}
+            </div>
+          </div>
+        );
+      case 'interviews':
+        return (
+          <div className="space-y-6">
+            <div className="flex border-b border-border pb-2 gap-4">
+              <button
+                onClick={() => setInterviewTab('coach')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${interviewTab === 'coach' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                AI Interview Coach
+              </button>
+              <button
+                onClick={() => setInterviewTab('scheduler')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${interviewTab === 'scheduler' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Scheduler
+              </button>
+            </div>
+            <div className="pt-4">
+              {interviewTab === 'coach' && <InterviewCoach />}
+              {interviewTab === 'scheduler' && <InterviewScheduler />}
+            </div>
+          </div>
+        );
+      case 'tools':
+        return (
+          <div className="space-y-6">
+            <div className="flex border-b border-border pb-2 gap-4">
+              <button
+                onClick={() => setToolsTab('gap')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${toolsTab === 'gap' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Skill Gap Analyzer
+              </button>
+              <button
+                onClick={() => setToolsTab('autofill')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${toolsTab === 'autofill' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Auto-Fill Setup
+              </button>
+              <button
+                onClick={() => setToolsTab('workflows')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${toolsTab === 'workflows' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Agent Workflows
+              </button>
+            </div>
+            <div className="pt-4">
+              {toolsTab === 'gap' && <SkillGapAnalyzer />}
+              {toolsTab === 'autofill' && <AutoFillStudio />}
+              {toolsTab === 'workflows' && <AgentWorkflows />}
+            </div>
+          </div>
+        );
+      case 'settings':
+        return <SettingsBYOK />;
+      default:
+        return (
+          <div className="space-y-6">
+            <div className="flex border-b border-border pb-2 gap-4">
+              <button
+                onClick={() => setDashboardTab('overview')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${dashboardTab === 'overview' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setDashboardTab('analytics')}
+                className={`pb-2 px-1 text-sm font-semibold transition-all cursor-pointer border-b-2 -mb-[10px] ${dashboardTab === 'analytics' ? 'border-deepsea-600 text-deepsea-600 dark:text-deepsea-400 dark:border-deepsea-400 font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              >
+                Analytics
+              </button>
+            </div>
+            <div className="pt-4">
+              <DashboardOverview resumeScore={activeResume?.score ?? 75} resumeName={activeResume?.name ?? 'Master Resume'} />
+            </div>
+          </div>
+        );
     }
   };
 

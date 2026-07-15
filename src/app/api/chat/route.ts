@@ -85,7 +85,7 @@ Based on the job requirements, here is your compatibility breakdown:
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { messages, config } = body;
+    const { messages, config, systemPrompt } = body;
     
     const provider = config?.provider || 'sandbox';
     const model = config?.model || '';
@@ -99,8 +99,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Format message history with System Prompt
+    const activeSystemPrompt = systemPrompt !== undefined ? systemPrompt : SYSTEM_PROMPT;
     const apiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      ...(activeSystemPrompt ? [{ role: 'system', content: activeSystemPrompt }] : []),
       ...messages.map((m: any) => ({
         role: m.role,
         content: m.content
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           model,
-          system: SYSTEM_PROMPT,
+          system: activeSystemPrompt || '',
           messages: anthropicMessages,
           max_tokens: maxTokens,
           temperature: temp,
@@ -203,11 +204,12 @@ export async function POST(req: NextRequest) {
       }));
 
       // Add system instruction inside contents (for older models) or header (newer)
-      // Here we append a system instruction prefix to the last user message or add as a first user item
-      geminiContents.unshift({
-        role: 'user',
-        parts: [{ text: `INSTRUCTION: ${SYSTEM_PROMPT}` }]
-      });
+      if (activeSystemPrompt) {
+        geminiContents.unshift({
+          role: 'user',
+          parts: [{ text: `INSTRUCTION: ${activeSystemPrompt}` }]
+        });
+      }
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}`,

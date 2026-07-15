@@ -38,45 +38,76 @@ export function useAutoPilot() {
 
   const runAutoPilotCycle = async () => {
     try {
-      setLastAction('Searching for matching jobs on Jooble...');
-      const joobleKey = await dbManager.getSetting<string>('jooble_api_key', '');
-      const profile = await dbManager.getSetting<any>('user_profile', {});
+      setLastAction('Auto-Pilot triggered: Initiating multi-board job search & scoring...');
       
-      let query = profile.title || 'Developer';
-      const params = new URLSearchParams();
-      params.append('category', query);
-      if (joobleKey) params.append('jooble_key', joobleKey);
-
-      const res = await fetch(`/api/jobs?${params.toString()}`);
-      if (!res.ok) throw new Error('API failed');
-      const data = await res.json();
-      const jobs: Job[] = data.results || [];
-
-      if (jobs.length === 0) {
-        setLastAction('No new jobs found in this cycle.');
+      // 1. Trigger search and AI scoring
+      const searchRes = await fetch('/api/autopilot/search', { method: 'POST' });
+      if (!searchRes.ok) throw new Error(`Search failed with status ${searchRes.status}`);
+      const searchData = await searchRes.json();
+      
+      if (!searchData.success) {
+        setLastAction(`Scan cycle completed: ${searchData.error || 'No results'}`);
         return;
       }
-
-      // Find a job we haven't applied to
-      const applied = await dbManager.getSavedJobs();
-      const appliedIds = applied.map(a => a.id);
-      const newJobs = jobs.filter(j => !appliedIds.includes(j.id) && j.url);
-
-      if (newJobs.length > 0) {
-        const targetJob = newJobs[0];
-        setLastAction(`Triggering auto-apply for: ${targetJob.title} at ${targetJob.company}`);
-        
-        // Save it so we don't apply again
-        await dbManager.saveJob(targetJob);
-        
-        // Trigger the extension or Tauri bridge to open the tab
-        window.postMessage({ action: 'TRIGGER_AUTO_APPLY', source: 'iphire-web', url: targetJob.url }, '*');
-      } else {
-        setLastAction('No unapplied jobs matched the criteria.');
+      
+      setLastAction(`Search completed. Found new matches.`);
+      
+      // 2. Fetch matched jobs pending review
+      const fetchRes = await fetch('/api/autopilot/search');
+      if (!fetchRes.ok) throw new Error('Failed to fetch matched jobs');
+      const fetchData = await fetchRes.json();
+      
+      const pendingJobs = (fetchData.jobs || []).filter((j: any) => j.status === 'pending_review');
+      
+      if (pendingJobs.length === 0) {
+        setLastAction('No high-matching jobs found to apply in this cycle.');
+        return;
       }
-    } catch (e) {
+      
+      // 3. Auto-draft and auto-submit applications for top matches (limit to 2 per cycle to be safe)
+      const jobsToApply = pendingJobs.slice(0, 2);
+      setLastAction(`Preparing auto-application submissions for ${jobsToApply.length} high-match roles...`);
+      
+      for (const job of jobsToApply) {
+        try {
+          setLastAction(`Drafting custom AI responses for ${job.title} at ${job.company}...`);
+          
+          // Generate draft
+          const draftRes = await fetch('/api/autopilot/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ autopilotJobId: job.id, action: 'draft' })
+          });
+          
+          if (!draftRes.ok) {
+            console.error(`Drafting failed for job ${job.id}`);
+            continue;
+          }
+          
+          setLastAction(`Submitting application form answers for ${job.title} at ${job.company}...`);
+          
+          // Submit application
+          const submitRes = await fetch('/api/autopilot/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ autopilotJobId: job.id, action: 'submit' })
+          });
+          
+          if (!submitRes.ok) {
+            console.error(`Submission failed for job ${job.id}`);
+            continue;
+          }
+          
+          setLastAction(`Successfully applied to ${job.title} at ${job.company}!`);
+        } catch (jobErr: any) {
+          console.error(`Failed to auto-apply for job ${job.id}:`, jobErr);
+        }
+      }
+      
+      setLastAction(`Auto-pilot cycle complete. Applied to ${jobsToApply.length} jobs.`);
+    } catch (e: any) {
       console.error(e);
-      setLastAction('Error during auto-pilot cycle.');
+      setLastAction(`Error during auto-pilot cycle: ${e.message}`);
     }
   };
 
